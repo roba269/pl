@@ -10,19 +10,12 @@
   [appC (fun : ExprC) (arg : ExprC)]
   ; [fdC (fun : symbol) (arg : symbol) (body : ExprC)]
   [lamC (arg : symbol) (body : ExprC)]
-  [boxC (arg : ExprC)]
-  [unboxC (arg : ExprC)]
-  [setboxC (b : ExprC) (v : ExprC)]
-  [seqC (b1 : ExprC) (b2 : ExprC)])
+  )
 
 (define-type Value
   [numV (n : number)]
-  [closV (arg : symbol) (body : ExprC) (env : Env)]
-  [boxV (l : Location)])
+  [closV (arg : symbol) (body : ExprC) (env : Env)])
 
-(define-type Result
-  [v*s (v : Value) (s : Store)])
-  
 ;(define-type FunDefC
 ;  [fdC (name : symbol) (arg : symbol) (body : ExprC)])
 
@@ -48,19 +41,13 @@
 ;  )
 ;)
 
-(define-type-alias Location number)
 (define-type Binding
-  [bind (name : symbol) (val : Location)])
+  [bind (name : symbol) (val : Value)])
 (define-type-alias Env (listof Binding))
 (define mt-env empty)
 (define extend-env cons)
-(define-type Storage
-  [cell (location : Location) (val : Value)])
-(define-type-alias Store (listof Storage))
-(define mt-store empty)
-(define override-store cons)
 
-(define (lookup [for : symbol] [env : Env]) : Location
+(define (lookup [for : symbol] [env : Env]) : Value
   (cond
     [(empty? env) {error 'lookup "name not found"}]
     [else (cond
@@ -68,14 +55,6 @@
              (bind-val (first env))]
             [else (lookup for (rest env))])]))
 
-(define (fetch [loc : Location] [sto : Store]) : Value
-  (cond
-    [(empty? sto) [error 'fetch "loc not found"]]
-    [else (cond
-            [(= loc (cell-location (first sto)))
-             (cell-val (first sto))]
-            [else (fetch loc (rest sto))])]))
-             
 ;(define (get-fundef [n : symbol] [fds : (listof FunDefC)]) : FunDefC
 ;  (cond
 ;    [(empty? fds) (error 'get-fundef "reference to undefined function")]
@@ -102,27 +81,16 @@
      (numV (* (numV-n l) (numV-n r)))]
     [else (error 'num* "arguments should be number")]))
 
-(define (interp [expr : ExprC] [env : Env] [sto : Store]) : Result
+(define (interp [expr : ExprC] [env : Env]) : Value
   (type-case ExprC expr
-    [numC (n) (v*s (numV n) sto)]
-    [idC (n) (v*s (fetch (lookup n env) sto) sto)]
+    [numC (n) (numV n)]
+    [idC (n) (lookup n env)]
     ; [fdC (n a b) (funV n a b)]
-    [lamC (a b) (v*s (closV a b env) sto)]
-    [seqC (b1 b2) (type-case Result (interp b1 env sto)
-                    [v*s (v-b1 s-b1)
-                         (interp b2 env s-b1)])]
-    [appC (f a) (v*s (numV 0) sto)]
-    [plusC (l r) (v*s (numV 0) sto)]
-    [multC (l r) (v*s (numV 0) sto)]
-    [boxC (a) (v*s (numV 0) sto)]
-    [unboxC (a) (v*s (numV 0) sto)]
-    [setboxC (b v) (v*s (numV 0) sto)]))
-    
-  
-    ;[appC (f a) (local ([define f-value (interp f env)])
-    ;              (interp (closV-body f-value)
-    ;                      (extend-env (bind (closV-arg f-value)
-    ;                                        (interp a env))
-    ;                                  env)))]
-    ;[plusC (l r) (num+ (interp l env) (interp r env))]
-    ;[multC (l r) (num* (interp l env) (interp r env))]))
+    [lamC (a b) (closV a b env)]
+    [appC (f a) (local ([define f-value (interp f env)])
+                  (interp (closV-body f-value)
+                          (extend-env (bind (closV-arg f-value)
+                                            (interp a env))
+                                      env)))]
+    [plusC (l r) (num+ (interp l env) (interp r env))]
+    [multC (l r) (num* (interp l env) (interp r env))]))
